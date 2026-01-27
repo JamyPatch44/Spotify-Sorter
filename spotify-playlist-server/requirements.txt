@@ -1,0 +1,23 @@
+# FastAPI and Server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# Spotify Integration
+spotipy==2.24.0
+
+# Database
+sqlalchemy==2.0.36
+aiosqlite==0.20.0
+
+# Scheduler
+apscheduler==3.10.4
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.10.4
+pydantic-settings==2.7.1
+croniter==5.0.1
+
+httpx==0.28.1
+requests>=2.31.0

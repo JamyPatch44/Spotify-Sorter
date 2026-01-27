@@ -1,0 +1,368 @@
+/* ConfigEditor.css match Design */
+
+.config-editor {
+    max-width: 800px;
+    margin: 2rem auto;
+    color: #b3b3b3;
+    padding-bottom: 80px;
+}
+
+/* Header */
+.editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.editor-title {
+    color: var(--color-primary);
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.close-btn {
+    background: transparent;
+    border: none;
+    color: #b3b3b3;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.close-btn:hover {
+    background: #333;
+    color: #fff;
+}
+
+
+/* Layout Grid */
+.config-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-row {
+    margin-bottom: 0.5rem;
+}
+
+.form-full-width {
+    grid-column: 1 / -1;
+    margin-bottom: 0.5rem;
+}
+
+/* Sections */
+.section-label {
+    display: block;
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 0.5rem;
+}
+
+.text-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: #2a2a2a;
+    border: 1px solid #404040;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+
+.text-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    background: #333;
+}
+
+.text-input.small {
+    padding: 0.4rem;
+    font-size: 0.85rem;
+}
+
+/* Playlist Selectors */
+.playlist-col {
+    display: flex;
+    flex-direction: column;
+}
+
+.col-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.5rem;
+}
+
+.count-badge {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.header-actions {
+    font-size: 0.8rem;
+}
+
+.action-link {
+    color: #b3b3b3;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.action-link:hover {
+    color: #fff;
+}
+
+
+/* Processing Options Row */
+.processing-section {
+    grid-column: 1 / -1;
+    margin-top: 0rem;
+    text-align: center;
+}
+
+.processing-header {
+    font-size: 1rem;
+    color: #b3b3b3;
+    margin-bottom: 0.2rem;
+}
+
+.info-sub {
+    font-size: 0.85rem;
+    color: #666;
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+
+.processing-cards {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.process-card {
+    background: #181818;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 0 1 200px;
+    min-width: 180px;
+}
+
+.process-card:hover {
+    border-color: #555;
+}
+
+.process-card.active {
+    background: rgba(29, 185, 84, 0.08);
+    border-color: var(--color-primary);
+}
+
+.card-check {
+    width: 20px;
+    height: 20px;
+    border: 1px solid #555;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #121212;
+    flex-shrink: 0;
+}
+
+.process-card.active .card-check {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.card-content h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.card-content span {
+    font-size: 0.8rem;
+    color: #777;
+    margin-top: 2px;
+    display: block;
+}
+
+
+/* Body Layout for Split Columns */
+.split-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+/* Bottom Section */
+.bottom-left-col,
+.bottom-right-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+.filter-group {
+    background: #181818;
+    padding: 1rem;
+    border-radius: 6px;
+    /* optional border or just background differentiation */
+}
+
+/* Update Mode Segmented Control */
+.update-mode-control {
+    display: flex;
+    background: #2a2a2a;
+    border-radius: 4px;
+    padding: 2px;
+    margin-bottom: 1rem;
+}
+
+.mode-option {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #aaa;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 3px;
+    text-align: center;
+}
+
+.mode-option:hover {
+    color: #fff;
+}
+
+.mode-option.selected {
+    background: var(--color-primary);
+    color: #000;
+    font-weight: 600;
+}
+
+/* Footer */
+.editor-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #181818;
+    border-top: 1px solid #2a2a2a;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    z-index: 900;
+}
+
+.btn-cancel {
+    padding: 0.6rem 1.25rem;
+    background: #404040;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.btn-cancel:hover {
+    background: #505050;
+}
+
+.btn-create {
+    padding: 0.6rem 1.25rem;
+    background: var(--color-primary);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.btn-create:hover {
+    background: var(--color-primary-hover);
+}
+
+
+/* Detail Settings (Sort Rules etc) */
+.settings-panel {
+    max-width: 680px;
+    margin: 0.5rem auto 1rem auto;
+    background: #222;
+    border: 1px solid #333;
+    padding: 1rem;
+    border-radius: 6px;
+    text-align: left;
+}
+
+.panel-header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--color-text);
+}
+
+.rule-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.icon-btn.danger {
+    background: transparent;
+    border: none;
+    color: #aaa;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 0 0.5rem;
+}
+
+.icon-btn.danger:hover {
+    color: var(--color-danger);
+}
+
+.btn-text {
+    background: transparent;
+    border: none;
+    color: var(--color-primary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-top: 0.5rem;
+}
+
+.btn-text:hover {
+    text-decoration: underline;
+}

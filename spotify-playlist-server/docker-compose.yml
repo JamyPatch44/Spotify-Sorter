@@ -1,0 +1,13 @@
+services:
+  spas:
+    build: .
+    container_name: spotify-playlist-server
+    restart: unless-stopped
+    ports:
+      - "27196:27196"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://localhost:27196/auth/callback}

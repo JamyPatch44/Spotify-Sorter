@@ -1,0 +1,4 @@
+/* Retaining only the background gradient */
+.login-bg {
+    background: radial-gradient(circle at center, #1e1e1e 0%, #0c0c0c 100%);
+}

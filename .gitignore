@@ -1,0 +1,65 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# Environment and credentials (never commit these)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Bundle outputs
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+
+# Temp files
+tsc_errors.txt
+
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+venv/
+ENV/
+
+# SQLite / Database
+*.db
+*.sqlite3
+spotify-playlist-server/data/
+spotify-playlist-server/frontend/dist/
+
+# Agent
+.agent/
+.gemini/
+

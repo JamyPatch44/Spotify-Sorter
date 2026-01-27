@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Spotify Playlist Automation</Name>
+  <Repository>ghcr.io/jamypatch44/spotify-playlist-server:latest</Repository>
+  <Registry>https://github.com/jamypatch44/spotify-playlist-server</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/JamyPatch44/Spotify-Sorter/issues</Support>
+  <Project>https://github.com/JamyPatch44/Spotify-Sorter</Project>
+  <Overview>
+    Self-hosted dynamic Spotify playlist manager. Automatically update playlists based on rules, filters, and multiple sources.
+    
+    Features:
+    - Merge multiple playlists
+    - Filter by keywords or exclude liked songs
+    - Sort by artist, album, release date, etc.
+    - Schedule updates with cron expressions
+    - Deduplicate tracks
+  </Overview>
+  <Category>Tools:Utilities</Category>
+  <WebUI>http://[IP]:[PORT:27196]</WebUI>
+  <TemplateURL/>
+  <Icon>https://upload.wikimedia.org/wikipedia/commons/1/19/Spotify_logo_without_text.svg</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled>1700000000</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Description>
+    Self-hosted dynamic Spotify playlist manager.
+  </Description>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>27196</HostPort>
+        <ContainerPort>27196</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user/appdata/spotify-playlist-server</HostDir>
+      <ContainerDir>/app/data</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+  </Data>
+  <Environment>
+    <Variable>
+      <Value/>
+      <Name>SPOTIFY_CLIENT_ID</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value/>
+      <Name>SPOTIFY_CLIENT_SECRET</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>http://[IP]:[PORT:27196]/auth/callback</Value>
+      <Name>SPOTIFY_REDIRECT_URI</Name>
+      <Mode/>
+    </Variable>
+  </Environment>
+  <Config Name="WebUI Port" Target="27196" Default="27196" Mode="tcp" Description="Port for the web interface" Type="Port" Display="always" Required="true" Mask="false">27196</Config>
+  <Config Name="App Data" Target="/app/data" Default="/mnt/user/appdata/spotify-playlist-server" Mode="rw" Description="Container data storage" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/spotify-playlist-server</Config>
+  <Config Name="Spotify Client ID" Target="SPOTIFY_CLIENT_ID" Default="" Mode="" Description="From Spotify Developer Dashboard" Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Spotify Client Secret" Target="SPOTIFY_CLIENT_SECRET" Default="" Mode="" Description="From Spotify Developer Dashboard" Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Redirect URI" Target="SPOTIFY_REDIRECT_URI" Default="http://YOUR_UNRAID_IP:27196/auth/callback" Mode="" Description="Callback URL (must match Spotify Dashboard)" Type="Variable" Display="always" Required="true" Mask="false"/>
+</Container>

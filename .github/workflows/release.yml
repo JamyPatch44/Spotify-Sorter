@@ -1,0 +1,94 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+            target: 'x86_64-pc-windows-msvc'
+            py_target: 'spotify-sorter-server-x86_64-pc-windows-msvc.exe'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' 
+
+
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd "spotify-playlist-server/frontend"
+          npm install
+          npm run build
+          cd ../..
+          npm install
+
+      - name: Build Python Server (PyInstaller)
+        shell: bash
+        run: |
+          pip install pyinstaller uvicorn fastapi sqlalchemy apscheduler requests spotipy pydantic pydantic-settings croniter
+          cd "spotify-playlist-server"
+          
+          # Determine separator
+          SEP=":"
+          if [ "${{ matrix.platform }}" == "windows-latest" ]; then
+            SEP=";"
+          fi
+          
+          # Build command
+          pyinstaller --noconfirm --onefile --windowed --name "spotify-sorter-server" \
+            --add-data "frontend/dist${SEP}frontend/dist" \
+            --hidden-import="uvicorn.logging" \
+            --hidden-import="uvicorn.loops" \
+            --hidden-import="uvicorn.loops.auto" \
+            --hidden-import="uvicorn.protocols" \
+            --hidden-import="uvicorn.protocols.http" \
+            --hidden-import="uvicorn.protocols.http.auto" \
+            --hidden-import="uvicorn.lifespan" \
+            --hidden-import="uvicorn.lifespan.on" \
+            --hidden-import="croniter" \
+            server_entry.py
+          
+# Removed server binary building logic
+
+      - name: Build Desktop App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Spotify Sorter ${{ github.ref_name }}'
+          releaseBody: 'See the assets to download this version and install.'
+          args: ${{ matrix.args }}
+          includeUpdaterJson: false
+
+      - name: Upload Server Binary
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            spotify-playlist-server/dist/spotify-sorter-server.exe
+            spotify-playlist-server/dist/spotify-sorter-server
