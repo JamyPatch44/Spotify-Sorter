@@ -42,7 +42,8 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
                     let app_handle = app.clone();
                     tauri::async_runtime::spawn(async move {
                         let state = app_handle.state::<crate::AppState>();
-                        let _ = crate::commands::run_all_dynamic_updates(state).await;
+                        let _ = crate::commands::run_all_dynamic_updates(app_handle.clone(), state)
+                            .await;
                     });
                 }
                 id if id.starts_with("run_") => {

@@ -14,7 +14,7 @@ interface DebugLog {
 }
 
 export function StatusBar({ onSettingsClick }: { onSettingsClick?: () => void }) {
-    const { statusText } = useAppStore();
+    const { statusText, setStatus } = useAppStore(); // Add setStatus
     const [showDebug, setShowDebug] = useState(false);
     const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -34,14 +34,19 @@ export function StatusBar({ onSettingsClick }: { onSettingsClick?: () => void })
     });
 
     useEffect(() => {
-        const unlistenPromise = listen<DebugLog>('debug-log', (event) => {
+        const unlistenDebug = listen<DebugLog>('debug-log', (event) => {
             setDebugLogs((prev) => [...prev, event.payload]);
         });
 
+        const unlistenStatus = listen<string>('status_update', (event) => {
+            setStatus(event.payload);
+        });
+
         return () => {
-            unlistenPromise.then((unlisten) => unlisten());
+            unlistenDebug.then((unlisten) => unlisten());
+            unlistenStatus.then((unlisten) => unlisten());
         };
-    }, []);
+    }, [setStatus]);
 
     const handleLogout = async () => {
         try {

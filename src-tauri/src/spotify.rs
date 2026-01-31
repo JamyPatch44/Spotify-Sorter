@@ -3,6 +3,7 @@ use rspotify::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use tauri::Emitter;
 
 pub const REDIRECT_URI: &str = "http://127.0.0.1:27196";
 
@@ -144,10 +145,36 @@ pub async fn fetch_all_playlists(
     let mut seen_ids = std::collections::HashSet::new();
 
     loop {
-        let page = spotify
-            .current_user_playlists_manual(Some(50), Some(offset))
-            .await
-            .map_err(|e| format!("Failed to get playlists: {}", e))?;
+        let mut attempts = 0;
+        let mut page_res = None;
+
+        while attempts < 5 {
+            match spotify
+                .current_user_playlists_manual(Some(50), Some(offset))
+                .await
+            {
+                Ok(p) => {
+                    page_res = Some(p);
+                    break;
+                }
+                Err(e) => {
+                    let err_str = e.to_string();
+                    if err_str.contains("429") || err_str.to_lowercase().contains("rate limit") {
+                        let sleep_duration = 2u64.pow(attempts + 1);
+                        println!(
+                            "Rate limit 429 (Playlists). Retrying in {}s...",
+                            sleep_duration
+                        );
+                        tokio::time::sleep(tokio::time::Duration::from_secs(sleep_duration)).await;
+                        attempts += 1;
+                    } else {
+                        return Err(format!("Failed to get playlists: {}", e));
+                    }
+                }
+            }
+        }
+
+        let page = page_res.ok_or("Failed to fetch playlists after retries")?;
 
         for item in &page.items {
             // Deduplicate by ID
@@ -269,6 +296,7 @@ pub type PlaylistCache = std::collections::HashMap<String, PlaylistCacheEntry>;
 pub async fn fetch_playlist_tracks(
     client: &AuthCodeSpotify,
     playlist_id: &str,
+    app_handle: &tauri::AppHandle,
 ) -> Result<(String, Vec<crate::logic::AppTrack>), String> {
     use crate::logic::AppTrack;
     use rspotify::model::PlaylistId;
@@ -277,10 +305,36 @@ pub async fn fetch_playlist_tracks(
     // 1. Get Playlist Metadata (snapshot_id)
     let pid = PlaylistId::from_id(playlist_id).map_err(|e| format!("Invalid ID: {}", e))?;
 
-    let playlist = client
-        .playlist(pid.clone(), None, None)
-        .await
-        .map_err(|e| format!("Failed to fetch playlist meta: {}", e))?;
+    let mut func_attempts = 0;
+    let max_func_attempts = 5;
+    let mut playlist_res = None;
+
+    while func_attempts < max_func_attempts {
+        match client.playlist(pid.clone(), None, None).await {
+            Ok(p) => {
+                playlist_res = Some(p);
+                break;
+            }
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("429") || err_str.to_lowercase().contains("rate limit") {
+                    let sleep_duration = 2u64.pow(func_attempts + 1);
+                    let msg = format!(
+                        "Rate limit 429. Retrying meta fetch in {}s...",
+                        sleep_duration
+                    );
+                    println!("{}", msg);
+                    let _ = app_handle.emit("status_update", &msg);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(sleep_duration)).await;
+                    func_attempts += 1;
+                } else {
+                    return Err(format!("Failed to fetch playlist meta: {}", e));
+                }
+            }
+        }
+    }
+
+    let playlist = playlist_res.ok_or("Failed to fetch playlist meta after retries")?;
 
     let current_snapshot_id = playlist.snapshot_id;
     let playlist_name = playlist.name;
@@ -313,10 +367,40 @@ pub async fn fetch_playlist_tracks(
     loop {
         // Use a raw request to ensure we get the URIs for local tracks
         let url = format!("playlists/{}/tracks?limit=100&offset={}", pid.id(), offset);
-        let res_str = client
-            .api_get(&url, &std::collections::HashMap::new())
-            .await
-            .map_err(|e| format!("Failed to fetch tracks raw: {}", e))?;
+
+        let mut attempts = 0;
+        let mut loop_res = None;
+
+        while attempts < 5 {
+            match client
+                .api_get(&url, &std::collections::HashMap::new())
+                .await
+            {
+                Ok(res_str) => {
+                    loop_res = Some(res_str);
+                    break;
+                }
+                Err(e) => {
+                    let err_str = e.to_string();
+                    if err_str.contains("429") || err_str.to_lowercase().contains("rate limit") {
+                        let sleep_duration = 2u64.pow(attempts + 1);
+                        let msg = format!(
+                            "Rate limit 429. Retrying batch {} in {}s...",
+                            offset / 100,
+                            sleep_duration
+                        );
+                        println!("{}", msg);
+                        let _ = app_handle.emit("status_update", &msg);
+                        tokio::time::sleep(tokio::time::Duration::from_secs(sleep_duration)).await;
+                        attempts += 1;
+                    } else {
+                        return Err(format!("Failed to fetch tracks raw: {}", e));
+                    }
+                }
+            }
+        }
+
+        let res_str = loop_res.ok_or("Failed to fetch tracks batch after retries")?;
 
         let res: serde_json::Value = serde_json::from_str(&res_str)
             .map_err(|e| format!("Failed to parse tracks JSON: {}", e))?;
@@ -369,22 +453,35 @@ pub async fn update_playlist_items(
     playlist_id: &str,
     new_uris: Vec<String>,
     old_uris: Option<Vec<String>>,
+    app_handle: &tauri::AppHandle,
 ) -> Result<(), String> {
     use rspotify::model::PlaylistId;
 
     let pid = PlaylistId::from_id(playlist_id).map_err(|e| format!("Invalid ID: {}", e))?;
 
-    // Check if we can use the Reorder Strategy (preferred for local files)
-    if let Some(current) = old_uris {
-        if !current.is_empty() {
-            println!("  Using REORDER strategy to preserve local files...");
-            return reorder_strategy(client, pid, current, new_uris).await;
+    // Check for local files
+    let has_local_files = new_uris
+        .iter()
+        .any(|u| u.contains(":local:") || u.starts_with("spotify:local"));
+
+    // Check if we MUST use the Reorder Strategy (required for local files to persist)
+    if has_local_files {
+        if let Some(current) = old_uris {
+            if !current.is_empty() {
+                println!(
+                    "  Using REORDER strategy (slower) to preserve {} local files...",
+                    new_uris.iter().filter(|u| u.contains(":local:")).count()
+                );
+                return reorder_strategy(client, pid, current, new_uris, app_handle).await;
+            }
         }
+    } else {
+        println!("  No local files detected. Using REPLACE strategy (Fast/Batch)...");
     }
 
     // Fallback to Replace Strategy (DELETE + POST)
-    // Only used for completely new lists or if old state is unknown
-    replace_strategy(client, pid, new_uris).await
+    // Faster for large playlists but cannot handle local files
+    replace_strategy(client, pid, new_uris, app_handle).await
 }
 
 async fn reorder_strategy(
@@ -392,6 +489,7 @@ async fn reorder_strategy(
     pid: rspotify::model::PlaylistId<'_>,
     mut current: Vec<String>,
     target: Vec<String>,
+    app_handle: &tauri::AppHandle,
 ) -> Result<(), String> {
     // 1. DELETE Phase: Remove items from 'current' that are not in 'target' (or excess duplicates)
     // We need to match counts. exact same instances.
@@ -474,7 +572,8 @@ async fn reorder_strategy(
         println!("  Warning: Mismatch after pruning. Current: {}, Target: {}. Local files might result in mismatch.", current.len(), target.len());
     }
 
-    for i in 0..target.len() {
+    let mut i = 0;
+    while i < target.len() {
         if i >= current.len() {
             break;
         } // Safety
@@ -483,6 +582,7 @@ async fn reorder_strategy(
 
         // Check if already correct
         if &current[i] == wanted_uri {
+            i += 1;
             continue;
         }
 
@@ -496,28 +596,78 @@ async fn reorder_strategy(
         }
 
         if let Some(src_idx) = found_idx {
-            // Move item from src_idx to i
-            match client
-                .playlist_reorder_items(
-                    pid.clone(),
-                    Some(src_idx as i32),
-                    Some(i as i32),
-                    Some(1),
-                    None,
-                )
-                .await
-            {
-                Ok(_) => {
-                    // Simulate move
-                    let item = current.remove(src_idx);
-                    current.insert(i, item);
-                }
-                Err(e) => {
-                    println!("    Failed to move item: {}", e);
+            // Found start of block. Check how many consecutive items match between source block and target block
+            // matches: current[src_idx..] vs target[i..]
+            let mut range_len = 1;
+            while (src_idx + range_len) < current.len() && (i + range_len) < target.len() {
+                if current[src_idx + range_len] == target[i + range_len] {
+                    range_len += 1;
+                } else {
+                    break;
                 }
             }
+
+            if range_len > 1 {
+                println!(
+                    "    Batch moving {} items from {} to position {}...",
+                    range_len, src_idx, i
+                );
+            }
+
+            // Move item(s) from src_idx to i
+            let mut attempts = 0;
+            let max_attempts = 5;
+            let mut success = false;
+
+            while attempts < max_attempts && !success {
+                match client
+                    .playlist_reorder_items(
+                        pid.clone(),
+                        Some(src_idx as i32),
+                        Some(i as i32),
+                        Some(range_len as u32),
+                        None,
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        // Simulate move locally to keep state consistent
+                        let chunk: Vec<_> = current.drain(src_idx..src_idx + range_len).collect();
+                        current.splice(i..i, chunk);
+                        success = true;
+                    }
+                    Err(e) => {
+                        let err_str = e.to_string();
+                        if err_str.contains("429") || err_str.to_lowercase().contains("rate limit")
+                        {
+                            let sleep_duration = 2u64.pow(attempts + 1);
+                            let msg = format!(
+                                "Rate limit hit (429). Retrying reorder in {}s... ({}/{})",
+                                sleep_duration,
+                                attempts + 1,
+                                max_attempts
+                            );
+                            println!("    {}", msg);
+                            let _ = app_handle.emit("status_update", &msg);
+                            tokio::time::sleep(tokio::time::Duration::from_secs(sleep_duration))
+                                .await;
+                            attempts += 1;
+                        } else {
+                            println!("    Failed to move item due to error: {}", e);
+                            return Err(format!("Failed to reorder track: {}", e));
+                        }
+                    }
+                }
+            }
+
+            if !success && attempts >= max_attempts {
+                return Err("Failed to reorder track: Rate limit retry exhaustion".to_string());
+            }
+
+            i += range_len;
         } else {
             // If not found, maybe it's just missing. Skip or warn.
+            i += 1;
         }
     }
 
@@ -530,6 +680,7 @@ async fn replace_strategy(
     client: &AuthCodeSpotify,
     pid: rspotify::model::PlaylistId<'_>,
     new_uris: Vec<String>,
+    app_handle: &tauri::AppHandle,
 ) -> Result<(), String> {
     println!("  Using REPLACE strategy...");
     let playlist_id_clean = pid.id().to_string();
@@ -561,17 +712,39 @@ async fn replace_strategy(
 
         // Try batch
         let body = serde_json::json!({ "uris": chunk });
-        let res = if is_first {
-            client.api_put(&url, &body).await
-        } else {
-            client.api_post(&url, &body).await
-        };
 
-        if let Err(e) = res {
-            println!("    Batch {}/{} failed: {}. Skipping batch (Local files not supported in Replace mode).", i + 1, total_chunks, e);
-            resize_errors += 1;
-        } else {
-            println!("    Batch {}/{} success.", i + 1, total_chunks);
+        let mut attempts = 0;
+        let mut success = false;
+
+        while attempts < 5 && !success {
+            let res = if is_first {
+                client.api_put(&url, &body).await
+            } else {
+                client.api_post(&url, &body).await
+            };
+
+            if let Err(e) = res {
+                let err_str = e.to_string();
+                if err_str.contains("429") || err_str.to_lowercase().contains("rate limit") {
+                    let sleep_duration = 2u64.pow(attempts + 1);
+                    let msg = format!(
+                        "Rate limit 429. Retrying batch {} in {}s...",
+                        i + 1,
+                        sleep_duration
+                    );
+                    println!("    {}", msg);
+                    let _ = app_handle.emit("status_update", &msg);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(sleep_duration)).await;
+                    attempts += 1;
+                } else {
+                    println!("    Batch {}/{} failed: {}. Skipping batch (Local files not supported in Replace mode).", i + 1, total_chunks, e);
+                    resize_errors += 1;
+                    success = true; // Stop retrying this error, treat as 'done' with error
+                }
+            } else {
+                println!("    Batch {}/{} success.", i + 1, total_chunks);
+                success = true;
+            }
         }
     }
 

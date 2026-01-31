@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
+use tauri::Emitter; // Import Emitter
 
 /// Source type for dynamic playlist tracks
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -161,9 +162,10 @@ pub fn save_dynamic_configs(configs: &[DynamicPlaylistConfig]) -> Result<(), Str
 pub async fn fetch_tracks_from_source(
     spotify: &AuthCodeSpotify,
     source: &Source,
+    app_handle: &tauri::AppHandle,
 ) -> Result<Vec<TrackInfo>, String> {
     match source {
-        Source::Playlist { id } => fetch_playlist_tracks(spotify, id).await,
+        Source::Playlist { id } => fetch_playlist_tracks(spotify, id, app_handle).await,
         Source::LikedSongs => fetch_liked_songs(spotify).await,
     }
 }
@@ -172,6 +174,7 @@ pub async fn fetch_tracks_from_source(
 async fn fetch_playlist_tracks(
     spotify: &AuthCodeSpotify,
     playlist_id: &str,
+    app_handle: &tauri::AppHandle,
 ) -> Result<Vec<TrackInfo>, String> {
     let mut tracks = Vec::new();
     let mut offset = 0;
@@ -181,10 +184,40 @@ async fn fetch_playlist_tracks(
             "playlists/{}/tracks?limit=100&offset={}",
             playlist_id, offset
         );
-        let res_str = spotify
-            .api_get(&url, &std::collections::HashMap::new())
-            .await
-            .map_err(|e| format!("Failed to fetch raw tracks: {}", e))?;
+
+        let mut attempts = 0;
+        let mut loop_res = None;
+
+        while attempts < 5 {
+            match spotify
+                .api_get(&url, &std::collections::HashMap::new())
+                .await
+            {
+                Ok(res_str) => {
+                    loop_res = Some(res_str);
+                    break;
+                }
+                Err(e) => {
+                    let err_str = e.to_string();
+                    if err_str.contains("429") || err_str.to_lowercase().contains("rate limit") {
+                        let sleep_duration = 2u64.pow(attempts + 1);
+                        let msg = format!(
+                            "Rate limit 429 (Dynamic). Retrying batch {} in {}s...",
+                            offset / 100,
+                            sleep_duration
+                        );
+                        println!("{}", msg);
+                        let _ = app_handle.emit("status_update", &msg);
+                        tokio::time::sleep(tokio::time::Duration::from_secs(sleep_duration)).await;
+                        attempts += 1;
+                    } else {
+                        return Err(format!("Failed to fetch raw tracks: {}", e));
+                    }
+                }
+            }
+        }
+
+        let res_str = loop_res.ok_or("Failed to fetch tracks batch after retries")?;
 
         let res: serde_json::Value = serde_json::from_str(&res_str)
             .map_err(|e| format!("Failed to parse tracks JSON: {}", e))?;
@@ -384,12 +417,13 @@ pub fn deduplicate_tracks(tracks: Vec<TrackInfo>) -> Vec<TrackInfo> {
 pub async fn update_dynamic_playlist(
     spotify: &AuthCodeSpotify,
     config: &DynamicPlaylistConfig,
+    app_handle: &tauri::AppHandle,
 ) -> Result<usize, String> {
     // Step 1: Collect tracks from all sources
     let mut all_tracks = Vec::new();
 
     for source in config.sources.iter() {
-        let mut source_tracks = fetch_tracks_from_source(spotify, source).await?;
+        let mut source_tracks = fetch_tracks_from_source(spotify, source, app_handle).await?;
 
         // Sample if configured
         source_tracks = sample_tracks(source_tracks, config.sample_per_source);
@@ -449,7 +483,8 @@ pub async fn update_dynamic_playlist(
         UpdateMode::Replace => processed_tracks.iter().map(|t| t.uri.clone()).collect(),
 
         UpdateMode::Merge => {
-            let existing = fetch_playlist_tracks(spotify, &config.target_playlist_id).await?;
+            let existing =
+                fetch_playlist_tracks(spotify, &config.target_playlist_id, app_handle).await?;
             let mut combined = existing;
             combined.extend(processed_tracks);
             let deduped = deduplicate_tracks(combined);
@@ -457,7 +492,8 @@ pub async fn update_dynamic_playlist(
         }
 
         UpdateMode::Append => {
-            let existing = fetch_playlist_tracks(spotify, &config.target_playlist_id).await?;
+            let existing =
+                fetch_playlist_tracks(spotify, &config.target_playlist_id, app_handle).await?;
             let existing_uris: HashSet<_> = existing.iter().map(|t| t.uri.clone()).collect();
 
             // Only add truly new tracks
@@ -477,8 +513,14 @@ pub async fn update_dynamic_playlist(
     let track_count = final_uris.len();
 
     // Step 7: Update the playlist
-    crate::spotify::update_playlist_items(spotify, &config.target_playlist_id, final_uris, None)
-        .await?;
+    crate::spotify::update_playlist_items(
+        spotify,
+        &config.target_playlist_id,
+        final_uris,
+        None,
+        app_handle,
+    )
+    .await?;
 
     Ok(track_count)
 }

@@ -358,7 +358,7 @@ pub async fn scan_playlist(
 
         // Fetch all tracks from the playlist
         // Fetch all tracks from the playlist (with caching)
-        let (pl_name, mut tracks) = match fetch_playlist_tracks(&client, playlist_id).await {
+        let (pl_name, mut tracks) = match fetch_playlist_tracks(&client, playlist_id, &app).await {
             Ok(res) => res,
             Err(e) => {
                 println!("Failed to fetch tracks for {}: {}", playlist_id, e);
@@ -798,6 +798,7 @@ pub async fn scan_playlist(
 
 #[tauri::command]
 pub async fn apply_changes(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     playlist_id: String,
     approved_changes: Vec<ReviewChange>, // Only the changes the user approved
@@ -889,7 +890,7 @@ pub async fn apply_changes(
     };
 
     // 1. Fetch latest tracks (using shared helper)
-    let (_, fetched_tracks) = crate::spotify::fetch_playlist_tracks(&client, &playlist_id)
+    let (_, fetched_tracks) = crate::spotify::fetch_playlist_tracks(&client, &playlist_id, &app)
         .await
         .map_err(|e| format!("Failed to fetch tracks: {}", e))?;
 
@@ -1099,8 +1100,14 @@ pub async fn apply_changes(
 
     // 5. Update Spotify
     let track_uris: Vec<String> = tracks.iter().map(|t| t.uri.clone()).collect();
-    crate::spotify::update_playlist_items(&client, &playlist_id, track_uris, Some(original_uris))
-        .await?;
+    crate::spotify::update_playlist_items(
+        &client,
+        &playlist_id,
+        track_uris,
+        Some(original_uris),
+        &app,
+    )
+    .await?;
 
     // 6. Update Cache with Sorted Tracks (Immediate Reflection)
     // We update the local cache so the UI reflects the changes instantly without a full scan
@@ -1193,7 +1200,7 @@ pub async fn create_backup(
         );
 
         // Fetch tracks for backup (using shared logic to ensure local tracks are included)
-        let (_, pl_tracks) = match fetch_playlist_tracks(&client, &playlist.id).await {
+        let (_, pl_tracks) = match fetch_playlist_tracks(&client, &playlist.id, &app).await {
             Ok(res) => res,
             Err(e) => {
                 println!(
@@ -1542,6 +1549,7 @@ pub async fn export_automation_config(config: AutomationConfig) -> Result<String
 
 #[tauri::command]
 pub async fn export_csv(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     playlist_ids: Vec<String>,
 ) -> Result<String, String> {
@@ -1563,7 +1571,7 @@ pub async fn export_csv(
 
     for playlist in &selected_playlists {
         // Fetch tracks for export
-        let (_, pl_tracks) = match fetch_playlist_tracks(&client, &playlist.id).await {
+        let (_, pl_tracks) = match fetch_playlist_tracks(&client, &playlist.id, &app).await {
             Ok(res) => res,
             Err(e) => {
                 println!(
@@ -1777,7 +1785,7 @@ pub async fn run_dynamic_update(
 }
 
 pub async fn run_dynamic_playlist_logic(
-    _app: &tauri::AppHandle,
+    app: &tauri::AppHandle,
     state: &State<'_, AppState>,
     config_id: &String,
 ) -> Result<String, String> {
@@ -1797,7 +1805,7 @@ pub async fn run_dynamic_playlist_logic(
             .clone()
     };
 
-    match update_dynamic_playlist(&spotify, &config).await {
+    match update_dynamic_playlist(&spotify, &config, app).await {
         Ok(count) => Ok(format!(
             "Updated playlist '{}': {} tracks",
             config.name, count
@@ -1808,7 +1816,10 @@ pub async fn run_dynamic_playlist_logic(
 
 /// Run all dynamic playlist updates (for automation)
 #[tauri::command]
-pub async fn run_all_dynamic_updates(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+pub async fn run_all_dynamic_updates(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
     let configs = load_dynamic_configs();
 
     // Clone the spotify client before releasing the lock
@@ -1824,7 +1835,7 @@ pub async fn run_all_dynamic_updates(state: State<'_, AppState>) -> Result<Vec<S
     let mut results = Vec::new();
 
     for config in &configs {
-        match update_dynamic_playlist(&spotify, config).await {
+        match update_dynamic_playlist(&spotify, config, &app).await {
             Ok(count) => results.push(format!("{}: {} tracks", config.name, count)),
             Err(e) => results.push(format!("{}: Error - {}", config.name, e)),
         }
